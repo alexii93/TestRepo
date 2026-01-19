@@ -1,0 +1,64 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: Validate PR source branch
+        id: validate
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          echo "Validating PR from branch: $BRANCH_NAME"
+          
+          # Only bugfix and feature branches are eligible for PR creation
+          ELIGIBLE=false
+          
+          # bugfix/<JiraId>_<descriptive title>
+          if [[ $BRANCH_NAME =~ ^bugfix/[A-Z]+-[0-9]+_.+ ]]; then
+            ELIGIBLE=true
+            echo "✓ Valid bugfix branch - eligible for PR"
+          # feature/<JiraId>_<descriptive title>
+          elif [[ $BRANCH_NAME =~ ^feature/[A-Z]+-[0-9]+_.+ ]]; then
+            ELIGIBLE=true
+            echo "✓ Valid feature branch - eligible for PR"
+          fi
+          
+          if [ "$ELIGIBLE" = false ]; then
+            echo "eligible=false" >> $GITHUB_OUTPUT
+            echo "❌ Branch '$BRANCH_NAME' is not eligible for PR creation"
+            echo "Only bugfix/* and feature/* branches can create pull requests"
+            exit 1
+          else
+            echo "eligible=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Close invalid PR
+        if: failure()
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          
+          # Add comment explaining why PR is being closed
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+            -d "{\"body\":\"❌ This pull request has been automatically closed because the source branch \`$BRANCH_NAME\` is not eligible for PR creation.\n\n**Only the following branch types can create pull requests:**\n- \`bugfix/<JiraId>_<descriptive-title>\`\n- \`feature/<JiraId>_<descriptive-title>\`\n\n**Current branch:** \`$BRANCH_NAME\`\n\nPlease ensure your branch follows the correct naming convention if you want to create a pull request.\"}"
+          
+          # Close the PR
+          curl -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
+            -d '{"state":"closed"}'
+          
+          echo "PR #${{ github.event.pull_request.number }} has been closed"
