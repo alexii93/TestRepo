@@ -41,13 +41,12 @@ jobs:
             echo "valid=false" >> $GITHUB_OUTPUT
             echo "❌ Invalid branch name: $BRANCH_NAME"
             echo "Branch does not match any valid naming pattern"
-            exit 1
           else
             echo "valid=true" >> $GITHUB_OUTPUT
           fi
       
       - name: Delete invalid branch
-        if: failure()
+        if: steps.validate.outputs.valid == 'false'
         run: |
           BRANCH_NAME="${{ github.ref_name }}"
           echo "Deleting invalid branch: $BRANCH_NAME"
