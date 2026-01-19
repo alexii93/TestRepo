@@ -35,13 +35,12 @@ jobs:
             echo "eligible=false" >> $GITHUB_OUTPUT
             echo "❌ Branch '$BRANCH_NAME' is not eligible for PR creation"
             echo "Only bugfix/* and feature/* branches can create pull requests"
-            exit 1
           else
             echo "eligible=true" >> $GITHUB_OUTPUT
           fi
       
       - name: Close invalid PR
-        if: failure()
+        if: steps.validate.outputs.eligible == 'false'
         run: |
           BRANCH_NAME="${{ github.head_ref }}"
           
